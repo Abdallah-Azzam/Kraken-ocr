@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -68,25 +69,51 @@ def _mean_confidence(confidences: Any) -> Optional[float]:
 
 
 class Predictor:
-    """Kraken OCR predictor with eager-loaded segmentation and recognition models."""
+    """Kraken OCR predictor with lazy-loaded segmentation and recognition models."""
 
     def __init__(self, manifest_path: Path | str = DEFAULT_MANIFEST) -> None:
         self.manifest_path = Path(manifest_path)
         self.manifest: dict[str, dict[str, str]] = {}
         self.segmenters: dict[str, SegmentationTaskModel] = {}
         self.recognizers: dict[str, RecognitionTaskModel] = {}
+        self._manifest_ready = False
+        self._load_lock = threading.Lock()
 
     def setup(self) -> None:
+        """Validate GPU and load the model manifest (weights load on first use)."""
+        self._ensure_manifest()
+        print(
+            f"Kraken manifest ready ({len(self.manifest)} models); "
+            "weights load on first request.",
+            flush=True,
+        )
+
+    def _ensure_manifest(self) -> None:
+        if self._manifest_ready:
+            return
         if not rp_cuda.is_available():
             raise RuntimeError("CUDA GPU is required but not available")
-
         if not self.manifest_path.is_file():
             raise FileNotFoundError(f"Model manifest not found: {self.manifest_path}")
-
         self.manifest = json.loads(self.manifest_path.read_text(encoding="utf-8"))
-        for key, entry in self.manifest.items():
+        self._manifest_ready = True
+
+    def _ensure_model(self, key: str) -> None:
+        self._ensure_manifest()
+        entry = self.manifest[key]
+        kind = entry.get("kind")
+        if kind == "segmentation" and key in self.segmenters:
+            return
+        if kind == "recognition" and key in self.recognizers:
+            return
+
+        with self._load_lock:
+            if kind == "segmentation" and key in self.segmenters:
+                return
+            if kind == "recognition" and key in self.recognizers:
+                return
+
             path = entry["path"]
-            kind = entry.get("kind")
             print(f"Loading {kind} model '{key}' from {path}...", flush=True)
             if kind == "segmentation":
                 self.segmenters[key] = SegmentationTaskModel.load_model(path)
@@ -94,7 +121,6 @@ class Predictor:
                 self.recognizers[key] = RecognitionTaskModel.load_model(path)
             else:
                 raise ValueError(f"Unknown model kind for {key}: {kind}")
-        print("All Kraken models loaded.", flush=True)
 
     def _resolve_models(
         self, document_type: str, language: str
@@ -114,10 +140,10 @@ class Predictor:
 
         seg_key = route["segmentation_key"]
         rec_key = route["recognition_key"]
-        segmenter = self.segmenters.get(seg_key)
-        recognizer = self.recognizers.get(rec_key)
-        if segmenter is None or recognizer is None:
-            raise RuntimeError(f"Models not loaded for route {document_type}/{language}")
+        self._ensure_model(seg_key)
+        self._ensure_model(rec_key)
+        segmenter = self.segmenters[seg_key]
+        recognizer = self.recognizers[rec_key]
 
         return segmenter, recognizer, {
             "segmentation": self.manifest[seg_key]["doi"],

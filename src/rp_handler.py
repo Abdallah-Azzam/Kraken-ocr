@@ -15,7 +15,6 @@ from runpod.serverless.utils import download_files_from_urls, rp_cleanup, rp_deb
 from runpod.serverless.utils.rp_validator import validate
 
 MODEL = Predictor()
-MODEL.setup()
 
 
 def _env_bool(name: str, default: bool) -> bool:
