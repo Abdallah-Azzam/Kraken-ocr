@@ -1,6 +1,6 @@
 # Kraken OCR Endpoint
 
-RunPod Serverless worker for **Kraken 7** GPU OCR, built for MedScribe clinical and pharmacy documents. Supports English and Arabic, printed and handwritten text, via image URL or base64.
+RunPod Serverless worker for **Kraken 7** GPU OCR. Supports English and Arabic, printed and handwritten text, via image URL or base64.
 
 ## Deploy
 
@@ -39,12 +39,12 @@ Segmentation uses a general multiscript model for printed/EN handwritten, and a 
 
 `POST https://api.runpod.ai/v2/{ENDPOINT_ID}/runsync`
 
-### Printed pharmacy label (Arabic)
+### Printed document (Arabic)
 
 ```json
 {
   "input": {
-    "image": "https://example.com/pharmacy-label.jpg",
+    "image": "https://example.com/document.jpg",
     "language": "ar",
     "document_type": "printed",
     "binarize": false,
@@ -53,7 +53,7 @@ Segmentation uses a general multiscript model for printed/EN handwritten, and a 
 }
 ```
 
-### Handwritten clinical note (English)
+### Handwritten document (English)
 
 ```json
 {
@@ -115,7 +115,7 @@ Segmentation uses a general multiscript model for printed/EN handwritten, and a 
 curl -X POST "https://api.runpod.ai/v2/{ENDPOINT_ID}/runsync" \
   -H "Authorization: Bearer $RUNPOD_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"input":{"image":"https://example.com/rx.jpg","language":"en","document_type":"printed"}}'
+  -d '{"input":{"image":"https://example.com/document.jpg","language":"en","document_type":"printed"}}'
 ```
 
 ## Local test
@@ -127,64 +127,14 @@ docker run --rm --gpus all -v "%cd%/test_input.json:/test_input.json" kraken-ocr
 
 ## Accuracy expectations
 
-These are **general-purpose** Kraken models, not clinical-fine-tuned. They work well as a baseline for clean scans of printed labels, forms, and notes. Expect lower accuracy on:
+These are **general-purpose** Kraken models. They work well on clean scans of printed labels, forms, and notes. Expect lower accuracy on:
 
 - Noisy fax scans, stamps, or watermarks
-- Medical abbreviations and domain-specific jargon
-- Very faint pencil or rushed clinical shorthand
-- Arabic clinical handwriting (Muharaf is trained on archival manuscripts)
+- Domain-specific jargon or abbreviations
+- Very faint pencil or rushed shorthand
+- Arabic handwriting (Muharaf is trained on archival manuscripts)
 
-Validate on real MedScribe samples before using with production PHI.
-
-## Follow-up: clinical fine-tuning
-
-The baked models are a starting point. For MedScribe production quality, plan a fine-tuning pass on your own annotated clinical/pharmacy data.
-
-### When to fine-tune
-
-- CER (character error rate) on your validation set stays above your target after trying `binarize`, better scans, or `document_type` routing
-- Specific recurring failures: drug names, dosages, Arabic diacritics, clinic-specific abbreviations
-- A single domain (e.g. UAE pharmacy labels only) where a smaller specialized model would outperform the general one
-
-### Workflow (high level)
-
-1. **Collect ground truth** — Page images plus line-level transcriptions. Prefer PageXML or ALTO (Kraken's native training formats). Tools like [eScriptorium](https://escriptorium.readthedocs.io/) help with annotation.
-
-2. **Normalize transcriptions** — Match the normalization of your base model (CATMuS uses NFKD; Arabic OpenITI/Muharaf use NFD). Keep drug names and abbreviations consistent in ground truth.
-
-3. **Fine-tune recognition** — Start from the closest base model for your script and document type:
-
-   ```bash
-   # Example: fine-tune English printed from CATMuS-Print
-   ketos train -f path/to/train.txt \
-     -t path/to/validation.txt \
-     --load 10.5281/zenodo.10592716 \
-     --epochs 30 -q early
-   ```
-
-   For Arabic printed, start from `10.5281/zenodo.7050296`. For handwritten English, start from McCATMuS (`10.5281/zenodo.13788177`).
-
-4. **Evaluate** — Hold out 10–20% of lines/pages. Track CER per document type and language. Spot-check drug names and numeric dosages manually.
-
-5. **Publish and bake** — Publish the new weights to Zenodo (`ketos publish`) or copy the `.safetensors` / `.mlmodel` into the Docker image. Update `builder/fetch_models.py` and `ROUTING` in `src/predict.py` to point at your fine-tuned DOI or local path.
-
-6. **Redeploy** — Rebuild the image, push to your registry, and update the RunPod endpoint. Consider `min_workers=1` during evaluation to avoid cold-start noise.
-
-### Segmentation fine-tuning (optional)
-
-If line detection fails on your forms (multi-column prescriptions, stamped overlays), fine-tune a segmentation model on PageXML with your layout. Start from the general segmentation model (`10.5281/zenodo.14602569`) or the Muharaf segmentation model for Arabic handwritten.
-
-### Data hygiene for PHI
-
-- Fine-tune only on de-identified or consent-approved data
-- Keep training artifacts out of public Zenodo deposits if they contain sensitive patterns
-- Prefer baking private fine-tuned weights into a private Docker image rather than publishing to the public Kraken model repository
-
-### Resources
-
-- [Kraken training tutorial](https://kraken.re/6.0.0/tutorials/training.html)
-- [Kraken model repository](https://kraken.re/6.0.0/advanced/repo.html)
-- [CATMuS transcription guidelines](https://catmus-guidelines.github.io/)
+Validate on your own sample documents before relying on output in production.
 
 ## Project layout
 

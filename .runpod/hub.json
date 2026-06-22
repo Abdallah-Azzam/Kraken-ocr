@@ -1,6 +1,6 @@
 {
   "title": "Kraken OCR Endpoint",
-  "description": "Kraken 7 GPU OCR for MedScribe: English and Arabic printed and handwritten clinical/pharmacy images via URL or base64.",
+  "description": "Kraken 7 GPU OCR: English and Arabic printed and handwritten documents via image URL or base64.",
   "type": "serverless",
   "category": "image",
   "iconUrl": "https://dummyimage.com/100x100/1a1a2e/fff&text=K",
