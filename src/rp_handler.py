@@ -32,12 +32,25 @@ def _env_int(name: str, default: int) -> int:
     return int(raw)
 
 
-def _apply_env_defaults(job_input: dict) -> dict:
+def _env_default(name: str, fallback: str = "all") -> str:
+    raw = os.environ.get(name, fallback)
+    return (raw or fallback).strip().lower()
+
+
+def _resolve_request_options(job_input: dict) -> Dict[str, Any]:
     resolved = dict(job_input)
+    default_language = _env_default("DEFAULT_LANGUAGE")
+    default_document_type = _env_default("DEFAULT_DOCUMENT_TYPE")
+
     if not resolved.get("language"):
-        resolved["language"] = os.environ.get("DEFAULT_LANGUAGE", "en")
+        if default_language == "all":
+            return {"error": "language is required (en or ar)"}
+        resolved["language"] = default_language
     if not resolved.get("document_type"):
-        resolved["document_type"] = os.environ.get("DEFAULT_DOCUMENT_TYPE", "printed")
+        if default_document_type == "all":
+            return {"error": "document_type is required (printed or handwritten)"}
+        resolved["document_type"] = default_document_type
+
     if resolved.get("binarize") is None:
         resolved["binarize"] = _env_bool("DEFAULT_BINARIZE", False)
     if resolved.get("batch_size") is None:
@@ -62,7 +75,10 @@ def run_kraken_job(job: Dict[str, Any]) -> Dict[str, Any]:
         input_validation = validate(job_input, INPUT_VALIDATIONS)
         if "errors" in input_validation:
             return {"error": str(input_validation["errors"])}
-        job_input = _apply_env_defaults(input_validation["validated_input"])
+        resolved = _resolve_request_options(input_validation["validated_input"])
+        if "error" in resolved:
+            return resolved
+        job_input = resolved
 
     has_image_url = bool(job_input.get("image"))
     has_image_base64 = bool(job_input.get("image_base64"))

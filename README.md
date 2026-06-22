@@ -93,8 +93,8 @@ Segmentation uses a general multiscript model for printed/EN handwritten, and a 
 |-------|---------|-------------|
 | `image` | — | Image URL (use one of `image` or `image_base64`) |
 | `image_base64` | — | Base64-encoded image bytes |
-| `language` | `en` | `en` or `ar` |
-| `document_type` | `printed` | `printed` or `handwritten` |
+| `language` | per preset | `en` or `ar`; required per request when `DEFAULT_LANGUAGE=all` |
+| `document_type` | per preset | `printed` or `handwritten`; required per request when `DEFAULT_DOCUMENT_TYPE=all` |
 | `binarize` | `false` | Apply nlbin preprocessing (try `true` for faint pen/pencil) |
 | `batch_size` | `32` | Lines per GPU recognition batch |
 | `include_lines` | `true` | Return per-line text, confidence, bbox |
@@ -103,11 +103,32 @@ Segmentation uses a general multiscript model for printed/EN handwritten, and a 
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `DEFAULT_LANGUAGE` | `en` | Fallback when request omits `language` |
-| `DEFAULT_DOCUMENT_TYPE` | `printed` | Fallback when request omits `document_type` |
+| `DEFAULT_LANGUAGE` | `all` | Fallback when request omits `language`; `all` requires it per request |
+| `DEFAULT_DOCUMENT_TYPE` | `all` | Fallback when request omits `document_type`; `all` requires it per request |
 | `DEFAULT_BATCH_SIZE` | `32` | Default recognition batch size |
 | `DEFAULT_BINARIZE` | `false` | Default binarization |
 | `KRAKEN_PRECISION` | `bf16-mixed` | GPU inference precision |
+
+## Hub presets
+
+| Preset | Use when |
+|--------|----------|
+| **All (en + ar, printed + handwritten)** | One endpoint for MedScribe — pass `language` and `document_type` on every request |
+| English printed | Locked to English printed text |
+| Arabic printed | Locked to Arabic printed text |
+| English handwritten | Locked to English handwritten text |
+| Arabic handwritten | Locked to Arabic handwritten text |
+
+All five Kraken models load at worker startup regardless of preset.
+
+### All preset example
+
+```bash
+curl -X POST "https://api.runpod.ai/v2/{ENDPOINT_ID}/runsync" \
+  -H "Authorization: Bearer $RUNPOD_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"input":{"image_base64":"<base64>","language":"ar","document_type":"handwritten","binarize":true,"include_lines":true}}'
+```
 
 ## Example
 

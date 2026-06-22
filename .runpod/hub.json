@@ -12,6 +12,15 @@
     "allowedCudaVersions": ["12.7", "12.6", "12.5", "12.4", "12.3", "12.2"],
     "presets": [
       {
+        "name": "All (en + ar, printed + handwritten)",
+        "defaults": {
+          "DEFAULT_LANGUAGE": "all",
+          "DEFAULT_DOCUMENT_TYPE": "all",
+          "DEFAULT_BATCH_SIZE": "32",
+          "DEFAULT_BINARIZE": "false"
+        }
+      },
+      {
         "name": "English printed",
         "defaults": {
           "DEFAULT_LANGUAGE": "en",
@@ -54,8 +63,9 @@
         "input": {
           "name": "Default language",
           "type": "select",
-          "options": ["en", "ar"],
-          "default": "en"
+          "description": "Use 'all' to require language (en or ar) on every API request",
+          "options": ["all", "en", "ar"],
+          "default": "all"
         }
       },
       {
@@ -63,8 +73,9 @@
         "input": {
           "name": "Default document type",
           "type": "select",
-          "options": ["printed", "handwritten"],
-          "default": "printed"
+          "description": "Use 'all' to require document_type (printed or handwritten) on every API request",
+          "options": ["all", "printed", "handwritten"],
+          "default": "all"
         }
       },
       {
