@@ -1,0 +1,99 @@
+{
+  "title": "Kraken OCR Endpoint",
+  "description": "Kraken 7 GPU OCR for MedScribe: English and Arabic printed and handwritten clinical/pharmacy images via URL or base64.",
+  "type": "serverless",
+  "category": "image",
+  "iconUrl": "https://dummyimage.com/100x100/1a1a2e/fff&text=K",
+  "config": {
+    "runsOn": "GPU",
+    "containerDiskInGb": 20,
+    "gpuCount": 1,
+    "gpuIds": "ADA_24",
+    "allowedCudaVersions": ["12.7", "12.6", "12.5", "12.4", "12.3", "12.2"],
+    "presets": [
+      {
+        "name": "English printed",
+        "defaults": {
+          "DEFAULT_LANGUAGE": "en",
+          "DEFAULT_DOCUMENT_TYPE": "printed",
+          "DEFAULT_BATCH_SIZE": "32",
+          "DEFAULT_BINARIZE": "false"
+        }
+      },
+      {
+        "name": "Arabic printed",
+        "defaults": {
+          "DEFAULT_LANGUAGE": "ar",
+          "DEFAULT_DOCUMENT_TYPE": "printed",
+          "DEFAULT_BATCH_SIZE": "32",
+          "DEFAULT_BINARIZE": "false"
+        }
+      },
+      {
+        "name": "English handwritten",
+        "defaults": {
+          "DEFAULT_LANGUAGE": "en",
+          "DEFAULT_DOCUMENT_TYPE": "handwritten",
+          "DEFAULT_BATCH_SIZE": "32",
+          "DEFAULT_BINARIZE": "true"
+        }
+      },
+      {
+        "name": "Arabic handwritten",
+        "defaults": {
+          "DEFAULT_LANGUAGE": "ar",
+          "DEFAULT_DOCUMENT_TYPE": "handwritten",
+          "DEFAULT_BATCH_SIZE": "32",
+          "DEFAULT_BINARIZE": "true"
+        }
+      }
+    ],
+    "env": [
+      {
+        "key": "DEFAULT_LANGUAGE",
+        "input": {
+          "name": "Default language",
+          "type": "select",
+          "options": ["en", "ar"],
+          "default": "en"
+        }
+      },
+      {
+        "key": "DEFAULT_DOCUMENT_TYPE",
+        "input": {
+          "name": "Default document type",
+          "type": "select",
+          "options": ["printed", "handwritten"],
+          "default": "printed"
+        }
+      },
+      {
+        "key": "DEFAULT_BATCH_SIZE",
+        "input": {
+          "name": "Recognition batch size",
+          "type": "number",
+          "description": "Lines per GPU recognition forward pass",
+          "min": 1,
+          "max": 128,
+          "default": 32,
+          "advanced": true
+        }
+      },
+      {
+        "key": "DEFAULT_BINARIZE",
+        "input": {
+          "type": "boolean",
+          "name": "Binarize by default",
+          "description": "Apply nlbin preprocessing (often helps faint handwriting)",
+          "default": false,
+          "trueValue": "true",
+          "falseValue": "false"
+        }
+      },
+      {
+        "key": "KRAKEN_PRECISION",
+        "value": "bf16-mixed"
+      }
+    ]
+  }
+}
