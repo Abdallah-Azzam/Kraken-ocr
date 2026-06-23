@@ -37,7 +37,7 @@ RUN apt-get update -y && \
 COPY builder/requirements.txt /requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip && \
-    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124 && \
+    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128 && \
     pip install -r /requirements.txt --no-cache-dir
 
 COPY builder/fetch_models.py /fetch_models.py
