@@ -19,7 +19,9 @@ DEFAULT_BATCH_SIZE = int(os.environ.get("DEFAULT_BATCH_SIZE", "32"))
 DEFAULT_NUM_LINE_WORKERS = int(os.environ.get("DEFAULT_NUM_LINE_WORKERS", "4"))
 DEFAULT_PRECISION = os.environ.get("KRAKEN_PRECISION", "bf16-mixed")
 TRIM_PADDING = int(os.environ.get("TRIM_PADDING", "12"))
-MIN_LINE_HEIGHT = int(os.environ.get("MIN_LINE_HEIGHT", "32"))
+# blla needs scan-like resolution; tiny crops/snippets are upscaled, full pages are not.
+MIN_SEG_HEIGHT = int(os.environ.get("MIN_SEG_HEIGHT", "120"))
+MIN_SEG_MAX_SIDE = int(os.environ.get("MIN_SEG_MAX_SIDE", "800"))
 
 ROUTING: dict[tuple[str, str], dict[str, str]] = {
     ("printed", "en"): {
@@ -71,13 +73,20 @@ def _trim_whitespace(im: Image.Image, padding: int = TRIM_PADDING) -> Image.Imag
     return im.crop((left, upper, right, lower))
 
 
-def _ensure_min_height(im: Image.Image, min_height: int = MIN_LINE_HEIGHT) -> Image.Image:
-    """Upscale very short crops so line segmentation has enough vertical context."""
-    if im.height >= min_height:
+def _ensure_segmentation_scale(im: Image.Image) -> Image.Image:
+    """Upscale small snippets to scan-like size; leave full-page images unchanged."""
+    max_side = max(im.width, im.height)
+    if max_side >= MIN_SEG_MAX_SIDE and im.height >= MIN_SEG_HEIGHT:
         return im
-    scale = min_height / im.height
+    scale = 1.0
+    if im.height < MIN_SEG_HEIGHT:
+        scale = max(scale, MIN_SEG_HEIGHT / im.height)
+    if max_side < MIN_SEG_MAX_SIDE:
+        scale = max(scale, MIN_SEG_MAX_SIDE / max_side)
+    if scale <= 1.0:
+        return im
     return im.resize(
-        (max(1, int(im.width * scale)), min_height),
+        (max(1, int(im.width * scale)), max(1, int(im.height * scale))),
         Image.Resampling.LANCZOS,
     )
 
@@ -193,7 +202,7 @@ class Predictor:
         with Image.open(image_path) as image:
             im = image.convert("RGB")
 
-        im = _ensure_min_height(_trim_whitespace(im))
+        im = _ensure_segmentation_scale(_trim_whitespace(im))
 
         if binarize:
             im = binarization.nlbin(im)
@@ -220,8 +229,9 @@ class Predictor:
             config=rec_config,
         ):
             prediction = getattr(record, "prediction", "") or ""
-            if prediction:
-                text_parts.append(prediction)
+            if not prediction.strip():
+                continue
+            text_parts.append(prediction)
             if include_lines:
                 line_entry: Dict[str, Any] = {"text": prediction}
                 confidence = _mean_confidence(getattr(record, "confidences", None))
