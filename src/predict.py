@@ -8,7 +8,7 @@ import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from PIL import Image
+from PIL import Image, ImageOps
 from kraken import binarization
 from kraken.configs import RecognitionInferenceConfig, SegmentationInferenceConfig
 from kraken.tasks import RecognitionTaskModel, SegmentationTaskModel
@@ -18,6 +18,8 @@ DEFAULT_MANIFEST = Path("/models/models.json")
 DEFAULT_BATCH_SIZE = int(os.environ.get("DEFAULT_BATCH_SIZE", "32"))
 DEFAULT_NUM_LINE_WORKERS = int(os.environ.get("DEFAULT_NUM_LINE_WORKERS", "4"))
 DEFAULT_PRECISION = os.environ.get("KRAKEN_PRECISION", "bf16-mixed")
+TRIM_PADDING = int(os.environ.get("TRIM_PADDING", "12"))
+MIN_LINE_HEIGHT = int(os.environ.get("MIN_LINE_HEIGHT", "32"))
 
 ROUTING: dict[tuple[str, str], dict[str, str]] = {
     ("printed", "en"): {
@@ -54,6 +56,30 @@ def _boundary_to_bbox(boundary: Any) -> Optional[List[int]]:
     if not xs or not ys:
         return None
     return [int(min(xs)), int(min(ys)), int(max(xs)), int(max(ys))]
+
+
+def _trim_whitespace(im: Image.Image, padding: int = TRIM_PADDING) -> Image.Image:
+    """Crop empty margins so blla sees a compact text block, not sparse whitespace."""
+    bbox = ImageOps.invert(im.convert("L")).getbbox()
+    if not bbox:
+        return im
+    left, upper, right, lower = bbox
+    left = max(0, left - padding)
+    upper = max(0, upper - padding)
+    right = min(im.width, right + padding)
+    lower = min(im.height, lower + padding)
+    return im.crop((left, upper, right, lower))
+
+
+def _ensure_min_height(im: Image.Image, min_height: int = MIN_LINE_HEIGHT) -> Image.Image:
+    """Upscale very short crops so line segmentation has enough vertical context."""
+    if im.height >= min_height:
+        return im
+    scale = min_height / im.height
+    return im.resize(
+        (max(1, int(im.width * scale)), min_height),
+        Image.Resampling.LANCZOS,
+    )
 
 
 def _mean_confidence(confidences: Any) -> Optional[float]:
@@ -166,6 +192,8 @@ class Predictor:
 
         with Image.open(image_path) as image:
             im = image.convert("RGB")
+
+        im = _ensure_min_height(_trim_whitespace(im))
 
         if binarize:
             im = binarization.nlbin(im)
